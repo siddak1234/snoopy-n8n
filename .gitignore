@@ -137,3 +137,33 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# ----------------------------
+# n8n specific
+# ----------------------------
+
+# n8n persistent storage (VERY IMPORTANT)
+data/
+.n8n/
+
+# local docker volumes
+postgres_data/
+redis_data/
+
+# secrets
+.env
+.env.local
+.env.production
+
+# OS junk
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+
+# ngrok / tunnels
+.ngrok2/
+
+# workflow exports temp
+tmp/
