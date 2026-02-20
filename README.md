@@ -1,0 +1,1 @@
+# snoopy-n8n
