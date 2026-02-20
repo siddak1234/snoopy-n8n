@@ -1,0 +1,4 @@
+services:
+  n8n:
+    environment:
+      - N8N_LOG_LEVEL=debug

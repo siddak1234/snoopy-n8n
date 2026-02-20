@@ -1,0 +1,12 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: snoopy-n8n
+    ports:
+      - "${N8N_PORT}:5678"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/home/node/.n8n
+    restart: unless-stopped
+    
