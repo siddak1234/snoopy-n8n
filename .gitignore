@@ -154,6 +154,7 @@ redis_data/
 .env
 .env.local
 .env.production
+secrets/*.json
 
 # OS junk
 .DS_Store
@@ -166,4 +167,4 @@ redis_data/
 .ngrok2/
 
 # workflow exports temp
-tmp/
+tmp/secrets/
