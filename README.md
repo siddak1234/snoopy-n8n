@@ -17,6 +17,16 @@
 - Persistent n8n data bind mount:
   - `./data:/home/node/.n8n`
 
+## Custom Node Layout
+
+- Custom node packages live under vendor folders:
+  - `custom-nodes/<vendor>/<node-package>/`
+- Current package location:
+  - `custom-nodes/mistral/n8n-nodes-mistral-document-ai`
+- Runtime loading remains unchanged:
+  - mount: `./custom-nodes:/home/node/.n8n/custom`
+  - env: `N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom`
+
 ## Bring Up
 
 ```bash
