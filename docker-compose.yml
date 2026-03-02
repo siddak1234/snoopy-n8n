@@ -9,7 +9,9 @@ services:
       - .env
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
+      - N8N_CUSTOM_EXTENSIONS=/home/node/.n8n/custom
     volumes:
       - ./data:/home/node/.n8n
+      - ./custom-nodes:/home/node/.n8n/custom
       - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro
     restart: unless-stopped
