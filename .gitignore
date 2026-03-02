@@ -155,6 +155,10 @@ redis_data/
 .env.local
 .env.production
 secrets/*.json
+secrets/gcs-service-account*
+secrets/gcp-sa.json
+secrets/*
+!secrets/.gitkeep
 
 # OS junk
 .DS_Store
