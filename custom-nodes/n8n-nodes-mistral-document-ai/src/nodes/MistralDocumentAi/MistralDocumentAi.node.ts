@@ -32,7 +32,7 @@ export class MistralDocumentAi implements INodeType {
 		outputs: ['main'],
 		credentials: [
 			{
-				name: 'mistralApi',
+				name: 'mistralCloudApi',
 				required: true,
 			},
 		],
@@ -302,18 +302,28 @@ export class MistralDocumentAi implements INodeType {
 				basePayload.document_annotation = annotation;
 			}
 
-			const credentials = await this.getCredentials('mistralApi', itemIndex);
-			const baseUrl = `${(credentials.baseUrl as string).replace(/\/$/, '')}`;
+			const credentials = await this.getCredentials('mistralCloudApi', itemIndex);
+			const apiKey = credentials.apiKey as string | undefined;
+			const baseUrl = `${((credentials.baseUrl as string | undefined) ?? 'https://api.mistral.ai').replace(/\/$/, '')}`;
+			if (!apiKey) {
+				throw new NodeOperationError(this.getNode(), 'Selected Mistral credential is missing an API key', {
+					itemIndex,
+				});
+			}
+			const authHeaders = {
+				Authorization: `Bearer ${apiKey}`,
+			};
 			const ocrEndpoint = `${baseUrl}/v1/ocr`;
 			const filesEndpoint = `${baseUrl}/v1/files`;
 
 			let rawResponse: IDataObject;
 
 			try {
-				rawResponse = (await this.helpers.requestWithAuthentication.call(this, 'mistralApi', {
+				rawResponse = (await this.helpers.httpRequest.call(this, {
 					method: 'POST',
 					url: ocrEndpoint,
 					json: true,
+					headers: authHeaders,
 					formData: {
 						file: {
 							value: binaryData,
@@ -326,10 +336,11 @@ export class MistralDocumentAi implements INodeType {
 					},
 				} as IHttpRequestOptions)) as IDataObject;
 			} catch {
-				const uploadResponse = (await this.helpers.requestWithAuthentication.call(this, 'mistralApi', {
+				const uploadResponse = (await this.helpers.httpRequest.call(this, {
 					method: 'POST',
 					url: filesEndpoint,
 					json: true,
+					headers: authHeaders,
 					formData: {
 						purpose: 'ocr',
 						file: {
@@ -361,10 +372,11 @@ export class MistralDocumentAi implements INodeType {
 					},
 				};
 
-				rawResponse = (await this.helpers.requestWithAuthentication.call(this, 'mistralApi', {
+				rawResponse = (await this.helpers.httpRequest.call(this, {
 					method: 'POST',
 					url: ocrEndpoint,
 					json: true,
+					headers: authHeaders,
 					body: ocrBody,
 				} as IHttpRequestOptions)) as IDataObject;
 			}

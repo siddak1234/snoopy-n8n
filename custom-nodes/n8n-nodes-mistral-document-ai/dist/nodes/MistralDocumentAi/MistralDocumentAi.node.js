@@ -19,7 +19,7 @@ class MistralDocumentAi {
             outputs: ['main'],
             credentials: [
                 {
-                    name: 'mistralApi',
+                    name: 'mistralCloudApi',
                     required: true,
                 },
             ],
@@ -207,7 +207,7 @@ class MistralDocumentAi {
         };
     }
     async execute() {
-        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         const items = this.getInputData();
         const returnData = [];
         for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
@@ -281,16 +281,26 @@ class MistralDocumentAi {
                 }
                 basePayload.document_annotation = annotation;
             }
-            const credentials = await this.getCredentials('mistralApi', itemIndex);
-            const baseUrl = `${credentials.baseUrl.replace(/\/$/, '')}`;
+            const credentials = await this.getCredentials('mistralCloudApi', itemIndex);
+            const apiKey = credentials.apiKey;
+            const baseUrl = `${((_f = credentials.baseUrl) !== null && _f !== void 0 ? _f : 'https://api.mistral.ai').replace(/\/$/, '')}`;
+            if (!apiKey) {
+                throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Selected Mistral credential is missing an API key', {
+                    itemIndex,
+                });
+            }
+            const authHeaders = {
+                Authorization: `Bearer ${apiKey}`,
+            };
             const ocrEndpoint = `${baseUrl}/v1/ocr`;
             const filesEndpoint = `${baseUrl}/v1/files`;
             let rawResponse;
             try {
-                rawResponse = (await this.helpers.requestWithAuthentication.call(this, 'mistralApi', {
+                rawResponse = (await this.helpers.httpRequest.call(this, {
                     method: 'POST',
                     url: ocrEndpoint,
                     json: true,
+                    headers: authHeaders,
                     formData: {
                         file: {
                             value: binaryData,
@@ -304,10 +314,11 @@ class MistralDocumentAi {
                 }));
             }
             catch {
-                const uploadResponse = (await this.helpers.requestWithAuthentication.call(this, 'mistralApi', {
+                const uploadResponse = (await this.helpers.httpRequest.call(this, {
                     method: 'POST',
                     url: filesEndpoint,
                     json: true,
+                    headers: authHeaders,
                     formData: {
                         purpose: 'ocr',
                         file: {
@@ -319,7 +330,7 @@ class MistralDocumentAi {
                         },
                     },
                 }));
-                const fileId = (_g = (_f = uploadResponse.id) !== null && _f !== void 0 ? _f : uploadResponse.file_id) !== null && _g !== void 0 ? _g : (_h = uploadResponse.data) === null || _h === void 0 ? void 0 : _h.id;
+                const fileId = (_h = (_g = uploadResponse.id) !== null && _g !== void 0 ? _g : uploadResponse.file_id) !== null && _h !== void 0 ? _h : (_j = uploadResponse.data) === null || _j === void 0 ? void 0 : _j.id;
                 if (!fileId) {
                     throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Mistral file upload did not return a file ID', {
                         itemIndex,
@@ -332,10 +343,11 @@ class MistralDocumentAi {
                         file_id: fileId,
                     },
                 };
-                rawResponse = (await this.helpers.requestWithAuthentication.call(this, 'mistralApi', {
+                rawResponse = (await this.helpers.httpRequest.call(this, {
                     method: 'POST',
                     url: ocrEndpoint,
                     json: true,
+                    headers: authHeaders,
                     body: ocrBody,
                 }));
             }

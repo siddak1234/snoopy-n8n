@@ -4,7 +4,8 @@ Custom n8n community node for Mistral Document AI OCR using binary PDF/image inp
 
 ## Features
 
-- Credential: **Mistral API** (`apiKey`, `baseUrl`)
+- Reuses built-in n8n credential type: **Mistral Cloud API** (`mistralCloudApi`)
+- Uses the same credential dropdown as built-in Mistral nodes (no separate API key entry in this node)
 - Node: **Mistral Document AI**
 - Binary input OCR (`data` by default)
 - Table extraction mode mapping:

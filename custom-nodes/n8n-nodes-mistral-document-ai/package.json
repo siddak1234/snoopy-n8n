@@ -27,9 +27,6 @@
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "credentials": [
-      "dist/credentials/MistralApi.credentials.js"
-    ],
     "nodes": [
       "dist/nodes/MistralDocumentAi/MistralDocumentAi.node.js"
     ]
