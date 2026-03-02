@@ -81,8 +81,8 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
-!custom-nodes/n8n-nodes-mistral-document-ai/dist/
-!custom-nodes/n8n-nodes-mistral-document-ai/dist/**
+!custom-nodes/mistral/n8n-nodes-mistral-document-ai/dist/
+!custom-nodes/mistral/n8n-nodes-mistral-document-ai/dist/**
 
 # Gatsby files
 .cache/
