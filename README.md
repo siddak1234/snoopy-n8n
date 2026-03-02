@@ -1,60 +1,51 @@
 # snoopy-n8n
 
-## Code Node Built-in Module Whitelist
+## Current Architecture
 
-To allow n8n Code nodes to use only required Node built-ins for local PDF processing, the `n8n` service sets:
+- Core runtime: self-hosted `n8n` container only.
+- Document path: Google Drive PDF -> Mistral Document OCR (`mistral-ocr-latest`) -> downstream logic.
+- Storage: Google Cloud Storage (GCS) remains the system of record for input/output artifacts.
+- Removed from repo runtime: local PDF/image rendering pipeline and MCP helper services.
 
-- `NODE_FUNCTION_ALLOW_BUILTIN=child_process,fs,path,os`
-- `NODE_FUNCTION_ALLOW_EXTERNAL=`
+## What Is Kept
 
-Use non-prefixed requires in Code nodes:
+- `n8n` service in `docker-compose.yml`
+- Service account mount for ADC:
+  - `./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro`
+- GCS auth env on n8n:
+  - `GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json`
+- Persistent n8n data bind mount:
+  - `./data:/home/node/.n8n`
 
-- `require('child_process')`
-- `require('fs')`
-- `require('path')`
-- `require('os')`
-
-Do not use `require('node:child_process')` because it can fail whitelist matching.
-
-### Restart
-
-```bash
-docker compose down
-docker compose up -d --build
-```
-
-### Verify env vars are active
+## Bring Up
 
 ```bash
-docker exec snoopy-n8n /bin/sh -lc "env | grep NODE_FUNCTION"
+docker compose build --no-cache
+docker compose up -d
+docker compose logs -f n8n
 ```
 
-### Rollback
-
-Remove the two `NODE_FUNCTION_*` lines from `docker-compose.yml`, then:
+## Smoke Checks
 
 ```bash
-docker compose down
-docker compose up -d --build
+# 1) n8n service is the only compose service
+docker compose config --services
+
+# 2) n8n is up
+docker compose ps
+
+# 3) GCS env wiring exists in container
+docker compose exec n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
+
+# 4) Mistral OCR path is documented/configured in repo docs
+rg -n "Mistral Document OCR|mistral-ocr-latest" README.md
+
+# 5) MCP/local-render references are removed
+rg -n "receipt-assembler|assemble_from_manifest|pdf-renderer|X-Internal-Token|pdftoppm|pdfinfo|ghostscript|imagemagick|mutool|gotenberg" -S . --glob '!README.md' --glob '!scripts/smoke-cleanup.sh'
 ```
 
-## Poppler In Image
-
-Poppler is baked into the custom image via `Dockerfile` so PDF rendering works inside the container runtime (no host installs, no runtime package install).
-
-### Quick validation
+Optional helper:
 
 ```bash
-./scripts/verify-poppler.sh
-docker exec -it snoopy-n8n sh -lc "pdftoppm -h | head -n 5"
-docker exec -it snoopy-n8n sh -lc "pdfinfo -v | head -n 3"
+./scripts/smoke-cleanup.sh
 ```
-
-### Rebuild and restart safely (preserves workflows)
-
-```bash
-docker compose down
-docker compose up -d --build
-```
-
-The bind mount `./data:/home/node/.n8n` keeps workflows/credentials between restarts.

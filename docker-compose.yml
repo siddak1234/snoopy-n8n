@@ -8,32 +8,8 @@ services:
     env_file:
       - .env
     environment:
-      - NODE_FUNCTION_ALLOW_BUILTIN=child_process,fs,path,os
-      - NODE_FUNCTION_ALLOW_EXTERNAL=
-      - N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n
-      - N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES=false
-      - N8N_BLOCK_FILE_ACCESS_TO=/bin,/sbin,/usr,/dev,/etc,/root
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
     volumes:
       - ./data:/home/node/.n8n
-      - ./data/tmp:/home/node/.n8n/tmp
-      - ./data/pages:/home/node/.n8n/pages
       - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro
-    tmpfs:
-      - /tmp
-    restart: unless-stopped
-
-  pdf-renderer:
-    build: ./services/pdf-renderer
-    image: snoopy-pdf-renderer:latest
-    container_name: pdf-renderer
-    environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
-      - INTERNAL_TOKEN=change-me
-    volumes:
-      - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro
-    ports:
-      - "8081:8080"
-    tmpfs:
-      - /tmp
     restart: unless-stopped
