@@ -35,7 +35,7 @@ docker compose config --services
 docker compose ps
 
 # 3) GCS env wiring exists in container
-docker compose exec snoopy-n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
+docker compose exec n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
 
 # 4) Mistral OCR path is documented/configured in repo docs
 rg -n "Mistral Document OCR|mistral-ocr-latest" README.md

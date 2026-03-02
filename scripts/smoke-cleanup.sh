@@ -12,7 +12,7 @@ echo "[3/5] Checking container status"
 docker compose ps
 
 echo "[4/5] Checking GCS env in n8n"
-docker compose exec snoopy-n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
+docker compose exec n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
 
 echo "[5/5] Verifying docs + removal references"
 rg -n "Mistral Document OCR|mistral-ocr-latest" README.md
