@@ -44,8 +44,10 @@ services:
     container_name: receipt-assembler
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - INTERNAL_TOKEN=change-me
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
       - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
     volumes:
       - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro

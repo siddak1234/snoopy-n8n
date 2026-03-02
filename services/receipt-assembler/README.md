@@ -2,6 +2,8 @@
 
 Internal MCP-style service that computes invoice `start_page` (after Gideon summary pages) and groups subsequent pages into invoice chunks using page-pair Gemini checks over GCS `gs://` image URIs.
 
+For `gs://` multimodal calls it uses **Vertex AI Gemini via ADC/OAuth** (not AI Studio API key transport).
+
 ## Endpoints
 
 - `GET /healthz` -> `{ "ok": true }`
@@ -71,10 +73,12 @@ Behavior:
 
 ## Env vars
 
-- `GEMINI_API_KEY` (required)
-- `GEMINI_MODEL` (optional, default `gemini-1.5-flash`)
+- `GOOGLE_CLOUD_PROJECT` (required for Vertex `gs://` multimodal)
+- `GOOGLE_CLOUD_LOCATION` (optional, default `us-central1`)
+- `GEMINI_MODEL` (optional, default `gemini-2.5-flash`)
 - `INTERNAL_TOKEN` (required)
 - `GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json`
+- `GEMINI_API_KEY` (optional fallback only for non-`gs://` text-only Developer API path)
 
 ## Run
 
@@ -89,6 +93,24 @@ curl -X POST http://localhost:8090/assemble_from_manifest \
   -H "Content-Type: application/json" \
   -H "X-Internal-Token: change-me" \
   -d '{"bucket":"invoice-ai-poc-storage-claros","manifest_object":"manifests/2026-03-02T03-45-34-314Z_incoming_Invoice 10194 FLL.pdf.json","max_pages":50,"debug":true}'
+```
+
+## Quick local docker run test
+
+```bash
+docker compose up -d --build receipt-assembler
+curl -X POST http://localhost:8090/assemble_from_manifest \
+  -H "Content-Type: application/json" \
+  -H "X-Internal-Token: change-me" \
+  -d '{"bucket":"invoice-ai-poc-storage-claros","manifest_object":"manifests/2026-03-02T03-45-34-314Z_incoming_Invoice 10194 FLL.pdf.json","max_pages":20,"debug":true}'
+```
+
+## Vertex payload smoke helper
+
+```bash
+python services/receipt-assembler/scripts/vertex_smoke.py \
+  --uri1 "gs://invoice-ai-poc-storage-claros/pages/<JOB_ID>/page-0001.jpg" \
+  --uri2 "gs://invoice-ai-poc-storage-claros/pages/<JOB_ID>/page-0002.jpg"
 ```
 
 ## n8n internal URL

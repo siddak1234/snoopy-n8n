@@ -5,8 +5,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+import google.auth
 import requests
 from fastapi import FastAPI, Header, HTTPException
+from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.cloud import storage
 from pydantic import BaseModel, Field
 
@@ -19,6 +21,9 @@ GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 REQUEST_TIMEOUT = 60
 MAX_START_SCAN_PAGE = 30
 MAX_DEBUG_TRACES = 200
+CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+
+_ADC_CREDENTIALS = None
 
 
 class AssembleInvoicesRequest(BaseModel):
@@ -116,6 +121,15 @@ def _parse_page_count_from_manifest(content: str) -> int | None:
     return None
 
 
+def _mime_type_from_uri(uri: str) -> str:
+    uri_l = uri.lower()
+    if uri_l.endswith(".png"):
+        return "image/png"
+    if uri_l.endswith(".webp"):
+        return "image/webp"
+    return "image/jpeg"
+
+
 def _storage_client() -> storage.Client:
     return storage.Client()
 
@@ -161,42 +175,108 @@ def _record_trace(
         traces.append(entry)
 
 
+def _vertex_endpoint(model: str) -> str:
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    if not project:
+        raise RuntimeError("GOOGLE_CLOUD_PROJECT is required for Vertex gs:// multimodal calls")
+    return (
+        f"https://{location}-aiplatform.googleapis.com/v1/projects/{project}/"
+        f"locations/{location}/publishers/google/models/{model}:generateContent"
+    )
+
+
+def _get_adc_token() -> str:
+    global _ADC_CREDENTIALS
+    if _ADC_CREDENTIALS is None:
+        _ADC_CREDENTIALS, _ = google.auth.default(scopes=[CLOUD_PLATFORM_SCOPE])
+
+    if not _ADC_CREDENTIALS.valid or _ADC_CREDENTIALS.expired:
+        _ADC_CREDENTIALS.refresh(GoogleAuthRequest())
+    return _ADC_CREDENTIALS.token
+
+
+def _extract_text_from_generate_content(data: dict[str, Any]) -> str:
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("Malformed generateContent response") from exc
+
+    text_parts = [p.get("text", "") for p in parts if isinstance(p, dict) and "text" in p]
+    if not text_parts:
+        raise RuntimeError("No text parts in generateContent response")
+    return "\n".join(text_parts)
+
+
+def _call_vertex_generate_content(model: str, parts: list[dict[str, Any]]) -> str:
+    token = _get_adc_token()
+    endpoint = _vertex_endpoint(model)
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": parts,
+            }
+        ],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 128},
+    }
+
+    resp = requests.post(
+        endpoint,
+        json=payload,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        timeout=REQUEST_TIMEOUT,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Vertex error ({resp.status_code}): {resp.text[:1000]}")
+
+    return _extract_text_from_generate_content(resp.json())
+
+
+def _call_developer_text_only(model: str, parts: list[dict[str, Any]]) -> str:
+    # Keep API-key path available for text-only use cases.
+    if any("fileData" in p for p in parts):
+        raise RuntimeError("Developer API path only supports text-only calls")
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required for Developer API text-only path")
+
+    url = f"{GEMINI_API_BASE}/{model}:generateContent?key={api_key}"
+    payload = {"contents": [{"parts": parts}], "generationConfig": {"temperature": 0, "maxOutputTokens": 128}}
+    resp = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Developer API error ({resp.status_code}): {resp.text[:1000]}")
+
+    return _extract_text_from_generate_content(resp.json())
+
+
+def _generate_content(model: str, parts: list[dict[str, Any]]) -> str:
+    has_gcs_file_uri = any(
+        isinstance(p, dict)
+        and isinstance(p.get("fileData"), dict)
+        and str(p.get("fileData", {}).get("fileUri", "")).startswith("gs://")
+        for p in parts
+    )
+    if has_gcs_file_uri:
+        return _call_vertex_generate_content(model=model, parts=parts)
+    return _call_developer_text_only(model=model, parts=parts)
+
+
 def _gemini_pair_call(
     model: str,
-    api_key: str,
     uri1: str,
     uri2: str,
     prompt: str,
     stats: dict[str, int],
 ) -> dict[str, Any]:
-    url = f"{GEMINI_API_BASE}/{model}:generateContent?key={api_key}"
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"file_data": {"mime_type": "image/jpeg", "file_uri": uri1}},
-                    {"file_data": {"mime_type": "image/jpeg", "file_uri": uri2}},
-                    {"text": prompt},
-                ]
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0,
-            "maxOutputTokens": 128,
-        },
-    }
-
     stats["gemini_calls"] += 1
-    resp = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
-    if resp.status_code >= 400:
-        raise RuntimeError(resp.text[:500])
-
-    data = resp.json()
-    try:
-        text = data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError, TypeError) as exc:
-        raise RuntimeError("Malformed Gemini response") from exc
-
+    parts = [
+        {"text": prompt},
+        {"fileData": {"mimeType": _mime_type_from_uri(uri1), "fileUri": uri1}},
+        {"fileData": {"mimeType": _mime_type_from_uri(uri2), "fileUri": uri2}},
+    ]
+    text = _generate_content(model=model, parts=parts)
     return _extract_json(text)
 
 
@@ -204,7 +284,6 @@ def _detect_start_page(
     ctx: RunContext,
     client: storage.Client,
     model: str,
-    api_key: str,
     stats: dict[str, int],
     warnings: list[str],
     traces: list[dict[str, Any]],
@@ -230,7 +309,6 @@ def _detect_start_page(
         try:
             out = _gemini_pair_call(
                 model=model,
-                api_key=api_key,
                 uri1=uri1,
                 uri2=uri2,
                 prompt=prompt,
@@ -266,7 +344,6 @@ def _group_invoices(
     start_page: int,
     client: storage.Client,
     model: str,
-    api_key: str,
     stats: dict[str, int],
     warnings: list[str],
     traces: list[dict[str, Any]],
@@ -295,7 +372,6 @@ def _group_invoices(
         try:
             out = _gemini_pair_call(
                 model=model,
-                api_key=api_key,
                 uri1=uri1,
                 uri2=uri2,
                 prompt=prompt,
@@ -355,11 +431,9 @@ def _group_invoices(
 
 
 def _run_assembly(ctx: RunContext) -> tuple[int, list[InvoiceGroup], dict[str, int], list[dict[str, Any]]]:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is required")
-
-    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    if not os.getenv("GOOGLE_CLOUD_PROJECT"):
+        raise HTTPException(status_code=500, detail="GOOGLE_CLOUD_PROJECT is required for Vertex multimodal")
     client = _storage_client()
 
     stats = {
@@ -374,7 +448,6 @@ def _run_assembly(ctx: RunContext) -> tuple[int, list[InvoiceGroup], dict[str, i
         ctx=ctx,
         client=client,
         model=model,
-        api_key=api_key,
         stats=stats,
         warnings=warnings,
         traces=traces,
@@ -385,7 +458,6 @@ def _run_assembly(ctx: RunContext) -> tuple[int, list[InvoiceGroup], dict[str, i
         start_page=start_page,
         client=client,
         model=model,
-        api_key=api_key,
         stats=stats,
         warnings=warnings,
         traces=traces,
@@ -416,6 +488,21 @@ def _fetch_manifest_text(bucket: str, manifest_object: str) -> str:
 @app.get("/healthz")
 def healthz() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.on_event("startup")
+def startup_log() -> None:
+    project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    vertex_enabled = bool(project)
+    logger.info(
+        "receipt-assembler startup: vertex_mode=%s project_set=%s location=%s model=%s",
+        vertex_enabled,
+        bool(project),
+        location,
+        model,
+    )
 
 
 @app.post("/assemble_invoices", response_model=BaseAssembleResponse)
