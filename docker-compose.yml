@@ -43,10 +43,11 @@ services:
     image: snoopy-receipt-assembler:latest
     container_name: receipt-assembler
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-change-me}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
-    expose:
-      - "8090"
+      - INTERNAL_TOKEN=change-me
+    ports:
+      - "8090:8090"
     tmpfs:
       - /tmp
     restart: unless-stopped

@@ -1,39 +1,49 @@
 # receipt-assembler
 
-Small internal MCP-style service that classifies rendered page images in GCS and groups consecutive receipt pages.
+Internal MCP-style service that computes invoice `start_page` (after Gideon summary pages) and groups subsequent pages into invoice chunks.
 
-## Endpoint
+## Endpoints
 
-`POST /assemble_receipts`
+- `GET /healthz` -> `{ "ok": true }`
+- `POST /assemble_invoices`
 
-Request JSON:
+## Auth
+
+`POST /assemble_invoices` requires header:
+
+- `X-Internal-Token: <INTERNAL_TOKEN>`
+
+## Request JSON
 
 ```json
 {
   "job_id": "string",
   "bucket": "string",
-  "start_page": 1,
   "page_count": 182,
   "pages_prefix": "pages/{job_id}/"
 }
 ```
 
-Response JSON:
+## Response JSON
 
 ```json
 {
-  "job_id": "...",
-  "receipt_start_page": 13,
-  "receipts": [
+  "job_id": "string",
+  "bucket": "string",
+  "start_page": 8,
+  "groups": [
     {
-      "receipt_id": "r0001",
-      "pages": [13, 14],
-      "multi_receipts_on_page": false,
-      "notes": "POC grouping of consecutive receipt pages"
+      "group_id": "g0001",
+      "pages": [8, 9],
+      "kind": "invoice",
+      "multi_invoices_on_page": false,
+      "notes": ""
     }
   ],
   "stats": {
-    "gemini_calls": 182
+    "gemini_calls": 0,
+    "pair_checks": 0,
+    "jpg_jpeg_fallbacks": 0
   }
 }
 ```
@@ -42,15 +52,23 @@ Response JSON:
 
 - `GEMINI_API_KEY` (required)
 - `GEMINI_MODEL` (optional, default `gemini-1.5-flash`)
+- `INTERNAL_TOKEN` (required for request auth)
 
-## Health
-
-`GET /healthz` => `{ "ok": true }`
-
-## Internal test (from n8n network)
+## Run
 
 ```bash
-curl -X POST http://receipt-assembler:8090/assemble_receipts \
-  -H "Content-Type: application/json" \
-  -d '{"job_id":"test123","bucket":"invoice-ai-poc-storage-claros","start_page":1,"page_count":10,"pages_prefix":"pages/test123/"}'
+docker compose up -d --build receipt-assembler
 ```
+
+## Local curl test (host)
+
+```bash
+curl -X POST http://localhost:8090/assemble_invoices \
+  -H "Content-Type: application/json" \
+  -H "X-Internal-Token: change-me" \
+  -d '{"job_id":"<JOB_ID>","bucket":"invoice-ai-poc-storage-claros","page_count":182,"pages_prefix":"pages/<JOB_ID>/"}'
+```
+
+## Internal call from n8n network
+
+`http://receipt-assembler:8090/assemble_invoices`
