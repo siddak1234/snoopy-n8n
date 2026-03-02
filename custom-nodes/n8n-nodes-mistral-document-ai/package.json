@@ -1,0 +1,48 @@
+{
+  "name": "n8n-nodes-mistral-document-ai",
+  "version": "0.1.0",
+  "description": "n8n community node for Mistral Document AI OCR",
+  "license": "MIT",
+  "author": "",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "mistral",
+    "ocr"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "main": "index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "gulp build",
+    "dev": "tsc -w",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "prepublishOnly": "npm run build && npm run lint"
+  },
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/MistralApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/MistralDocumentAi/MistralDocumentAi.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.11",
+    "@typescript-eslint/eslint-plugin": "^7.16.1",
+    "@typescript-eslint/parser": "^7.16.1",
+    "eslint": "^8.57.0",
+    "gulp": "^5.0.0",
+    "typescript": "^5.5.4"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
