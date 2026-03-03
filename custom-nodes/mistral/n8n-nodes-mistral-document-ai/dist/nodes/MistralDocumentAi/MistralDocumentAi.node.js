@@ -144,6 +144,13 @@ class MistralDocumentAi {
                     default: false,
                 },
                 {
+                    displayName: 'Annotate Per Page',
+                    name: 'perPageAnnotation',
+                    type: 'boolean',
+                    default: false,
+                    description: 'When enabled, processes each requested page separately and outputs one item per page',
+                },
+                {
                     displayName: 'Annotation Output Format',
                     name: 'annotationOutputFormat',
                     type: 'options',
@@ -207,28 +214,41 @@ class MistralDocumentAi {
         };
     }
     async execute() {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         const items = this.getInputData();
         const returnData = [];
         for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-            const binaryPropertyName = this.getNodeParameter('binaryPropertyName', itemIndex);
-            const inputDocumentType = this.getNodeParameter('inputDocumentType', itemIndex);
-            const modelParam = this.getNodeParameter('model', itemIndex);
-            const useCustomModel = this.getNodeParameter('useCustomModel', itemIndex);
-            const customModel = this.getNodeParameter('customModel', itemIndex);
-            const pages = this.getNodeParameter('pages', itemIndex).trim();
-            const extractTables = this.getNodeParameter('extractTables', itemIndex);
-            const extractHeader = this.getNodeParameter('extractHeader', itemIndex);
-            const extractFooter = this.getNodeParameter('extractFooter', itemIndex);
-            const extractImages = this.getNodeParameter('extractImages', itemIndex);
-            const imageLimit = this.getNodeParameter('imageLimit', itemIndex);
-            const minImageSize = this.getNodeParameter('minImageSize', itemIndex);
-            const extractHyperlinks = this.getNodeParameter('extractHyperlinks', itemIndex);
-            const enableDocumentAnnotation = this.getNodeParameter('enableDocumentAnnotation', itemIndex);
-            const annotationOutputFormat = this.getNodeParameter('annotationOutputFormat', itemIndex);
-            const annotationPrompt = this.getNodeParameter('annotationPrompt', itemIndex);
-            const annotationSchema = this.getNodeParameter('annotationSchema', itemIndex);
-            const additionalOptions = this.getNodeParameter('additionalOptions', itemIndex);
+            const binaryPropertyName = this.getNodeParameter('binaryPropertyName', itemIndex, 'data');
+            const inputDocumentType = this.getNodeParameter('inputDocumentType', itemIndex, 'auto');
+            const modelParam = this.getNodeParameter('model', itemIndex, 'mistral-ocr-latest');
+            const useCustomModel = this.getNodeParameter('useCustomModel', itemIndex, false);
+            const customModel = useCustomModel
+                ? this.getNodeParameter('customModel', itemIndex, '')
+                : '';
+            const pages = this.getNodeParameter('pages', itemIndex, '').trim();
+            const extractTables = this.getNodeParameter('extractTables', itemIndex, 'inline');
+            const extractHeader = this.getNodeParameter('extractHeader', itemIndex, false);
+            const extractFooter = this.getNodeParameter('extractFooter', itemIndex, false);
+            const extractImages = this.getNodeParameter('extractImages', itemIndex, false);
+            const imageLimit = extractImages
+                ? this.getNodeParameter('imageLimit', itemIndex, 10)
+                : 10;
+            const minImageSize = extractImages
+                ? this.getNodeParameter('minImageSize', itemIndex, 0)
+                : 0;
+            const extractHyperlinks = this.getNodeParameter('extractHyperlinks', itemIndex, false);
+            const enableDocumentAnnotation = this.getNodeParameter('enableDocumentAnnotation', itemIndex, false);
+            const perPageAnnotation = this.getNodeParameter('perPageAnnotation', itemIndex, false);
+            const annotationOutputFormat = enableDocumentAnnotation
+                ? this.getNodeParameter('annotationOutputFormat', itemIndex, 'json')
+                : 'json';
+            const annotationPrompt = enableDocumentAnnotation
+                ? this.getNodeParameter('annotationPrompt', itemIndex, '')
+                : '';
+            const annotationSchema = enableDocumentAnnotation
+                ? this.getNodeParameter('annotationSchema', itemIndex, '')
+                : '';
+            const additionalOptions = this.getNodeParameter('additionalOptions', itemIndex, {});
             const normalizeOutput = (_a = additionalOptions.normalizeOutput) !== null && _a !== void 0 ? _a : true;
             const returnRawResponse = (_b = additionalOptions.returnRawResponse) !== null && _b !== void 0 ? _b : false;
             const model = useCustomModel ? customModel : modelParam;
@@ -246,40 +266,53 @@ class MistralDocumentAi {
             const resolvedType = resolveDocumentType(inputDocumentType, mimeType, fileName);
             const basePayload = {
                 model,
-                document_type: resolvedType,
-                table_format: extractTables === 'inline' ? null : extractTables,
-                extract_header: extractHeader,
-                extract_footer: extractFooter,
             };
             if (pages) {
                 basePayload.pages = pages;
+            }
+            if (extractTables !== 'inline') {
+                basePayload.table_format = extractTables;
+            }
+            if (extractHeader) {
+                basePayload.extract_header = true;
+            }
+            if (extractFooter) {
+                basePayload.extract_footer = true;
             }
             if (extractImages) {
                 basePayload.extract_images = true;
                 if (imageLimit > 0)
                     basePayload.image_limit = imageLimit;
                 if (minImageSize > 0)
-                    basePayload.min_image_size = minImageSize;
+                    basePayload.image_min_size = minImageSize;
             }
             if (extractHyperlinks) {
                 basePayload.extract_hyperlinks = true;
             }
             if (enableDocumentAnnotation) {
-                const annotation = {
-                    format: annotationOutputFormat,
-                };
                 if (annotationPrompt.trim()) {
-                    annotation.prompt = annotationPrompt;
+                    basePayload.document_annotation_prompt = annotationPrompt;
                 }
                 if (annotationOutputFormat === 'json' && annotationSchema && `${annotationSchema}`.trim()) {
                     try {
-                        annotation.schema = parseJsonSchema(annotationSchema);
+                        basePayload.document_annotation_format = {
+                            type: 'json_schema',
+                            json_schema: {
+                                name: 'document_annotation',
+                                schema: parseJsonSchema(annotationSchema),
+                            },
+                        };
                     }
                     catch (error) {
                         throw new n8n_workflow_1.NodeOperationError(this.getNode(), error.message, { itemIndex });
                     }
                 }
-                basePayload.document_annotation = annotation;
+                else if (annotationOutputFormat === 'json') {
+                    basePayload.document_annotation_format = { type: 'json_object' };
+                }
+                else {
+                    basePayload.document_annotation_format = { type: 'text' };
+                }
             }
             const credentials = await this.getCredentials('mistralCloudApi', itemIndex);
             const apiKey = credentials.apiKey;
@@ -294,63 +327,6 @@ class MistralDocumentAi {
             };
             const ocrEndpoint = `${baseUrl}/v1/ocr`;
             const filesEndpoint = `${baseUrl}/v1/files`;
-            let rawResponse;
-            try {
-                rawResponse = (await this.helpers.httpRequest.call(this, {
-                    method: 'POST',
-                    url: ocrEndpoint,
-                    json: true,
-                    headers: authHeaders,
-                    formData: {
-                        file: {
-                            value: binaryData,
-                            options: {
-                                filename: fileName,
-                                contentType: mimeType,
-                            },
-                        },
-                        payload: JSON.stringify(basePayload),
-                    },
-                }));
-            }
-            catch {
-                const uploadResponse = (await this.helpers.httpRequest.call(this, {
-                    method: 'POST',
-                    url: filesEndpoint,
-                    json: true,
-                    headers: authHeaders,
-                    formData: {
-                        purpose: 'ocr',
-                        file: {
-                            value: binaryData,
-                            options: {
-                                filename: fileName,
-                                contentType: mimeType,
-                            },
-                        },
-                    },
-                }));
-                const fileId = (_h = (_g = uploadResponse.id) !== null && _g !== void 0 ? _g : uploadResponse.file_id) !== null && _h !== void 0 ? _h : (_j = uploadResponse.data) === null || _j === void 0 ? void 0 : _j.id;
-                if (!fileId) {
-                    throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Mistral file upload did not return a file ID', {
-                        itemIndex,
-                    });
-                }
-                const ocrBody = {
-                    ...basePayload,
-                    document: {
-                        type: 'file_id',
-                        file_id: fileId,
-                    },
-                };
-                rawResponse = (await this.helpers.httpRequest.call(this, {
-                    method: 'POST',
-                    url: ocrEndpoint,
-                    json: true,
-                    headers: authHeaders,
-                    body: ocrBody,
-                }));
-            }
             let parsedPageRange = null;
             if (pages) {
                 try {
@@ -360,6 +336,141 @@ class MistralDocumentAi {
                     throw new n8n_workflow_1.NodeOperationError(this.getNode(), error.message, { itemIndex });
                 }
             }
+            const requestOcr = async (payload, pageLabel) => {
+                var _a, _b, _c;
+                let rawResponse = null;
+                let multipartError;
+                let jsonOcrError;
+                let uploadError;
+                try {
+                    rawResponse = (await this.helpers.httpRequest.call(this, {
+                        method: 'POST',
+                        url: ocrEndpoint,
+                        json: true,
+                        headers: authHeaders,
+                        formData: {
+                            file: {
+                                value: binaryData,
+                                options: {
+                                    filename: fileName,
+                                    contentType: mimeType,
+                                },
+                            },
+                            payload: JSON.stringify(payload),
+                        },
+                    }));
+                }
+                catch (error) {
+                    multipartError = error;
+                    const dataUrl = `data:${mimeType};base64,${binaryData.toString('base64')}`;
+                    const documentKey = resolvedType === 'pdf' ? 'document_url' : 'image_url';
+                    const documentType = resolvedType === 'pdf' ? 'document_url' : 'image_url';
+                    const jsonBody = {
+                        ...payload,
+                        document: {
+                            type: documentType,
+                            document_name: fileName,
+                            [documentKey]: dataUrl,
+                        },
+                    };
+                    try {
+                        rawResponse = (await this.helpers.httpRequest.call(this, {
+                            method: 'POST',
+                            url: ocrEndpoint,
+                            json: true,
+                            headers: authHeaders,
+                            body: jsonBody,
+                        }));
+                    }
+                    catch (error) {
+                        jsonOcrError = error;
+                        try {
+                            const uploadResponse = (await this.helpers.httpRequest.call(this, {
+                                method: 'POST',
+                                url: filesEndpoint,
+                                json: true,
+                                headers: authHeaders,
+                                formData: {
+                                    purpose: 'ocr',
+                                    file: {
+                                        value: binaryData,
+                                        options: {
+                                            filename: fileName,
+                                            contentType: mimeType,
+                                        },
+                                    },
+                                },
+                            }));
+                            const fileId = (_b = (_a = uploadResponse.id) !== null && _a !== void 0 ? _a : uploadResponse.file_id) !== null && _b !== void 0 ? _b : (_c = uploadResponse.data) === null || _c === void 0 ? void 0 : _c.id;
+                            if (!fileId) {
+                                throw new n8n_workflow_1.NodeOperationError(this.getNode(), 'Mistral file upload did not return a file ID', {
+                                    itemIndex,
+                                });
+                            }
+                            const ocrBody = {
+                                ...payload,
+                                document: {
+                                    file_id: fileId,
+                                },
+                            };
+                            rawResponse = (await this.helpers.httpRequest.call(this, {
+                                method: 'POST',
+                                url: ocrEndpoint,
+                                json: true,
+                                headers: authHeaders,
+                                body: ocrBody,
+                            }));
+                        }
+                        catch (error) {
+                            uploadError = error;
+                        }
+                    }
+                }
+                if (!rawResponse) {
+                    const onPage = pageLabel ? ` for page ${pageLabel}` : '';
+                    throw new n8n_workflow_1.NodeOperationError(this.getNode(), [
+                        `Mistral OCR failed${onPage} after all request strategies.`,
+                        `multipart: ${extractApiErrorMessage(multipartError)}`,
+                        `json: ${extractApiErrorMessage(jsonOcrError)}`,
+                        `upload: ${extractApiErrorMessage(uploadError)}`,
+                    ].join(' '), { itemIndex });
+                }
+                return rawResponse;
+            };
+            const explicitPages = parsedPageRange ? toSortedPageArray(parsedPageRange.pages) : [];
+            if (perPageAnnotation && explicitPages.length > 1) {
+                for (const pageNumber of explicitPages) {
+                    const singlePagePayload = {
+                        ...basePayload,
+                        pages: String(pageNumber),
+                    };
+                    const pageRawResponse = await requestOcr(singlePagePayload, pageNumber);
+                    const singlePageRange = parsePageRange(String(pageNumber));
+                    const pageOutput = normalizeOcrResponse(pageRawResponse, {
+                        model,
+                        mimeType,
+                        requestedPages: singlePageRange,
+                    });
+                    const normalizedPages = (_g = pageOutput.pages) !== null && _g !== void 0 ? _g : [];
+                    const page = normalizedPages[0];
+                    const perPageItem = {
+                        page_index: pageNumber,
+                        page,
+                        document_annotation: (_h = pageOutput.document_annotation) !== null && _h !== void 0 ? _h : pageRawResponse.document_annotation,
+                        meta: {
+                            model,
+                            requestedPages: parsedPageRange === null || parsedPageRange === void 0 ? void 0 : parsedPageRange.requested,
+                            singlePage: pageNumber,
+                        },
+                    };
+                    if (returnRawResponse) {
+                        perPageItem.raw = pageRawResponse;
+                    }
+                    returnData.push({ json: perPageItem });
+                }
+                continue;
+            }
+            const rawResponse = await requestOcr(basePayload);
             const outputJson = normalizeOutput
                 ? normalizeOcrResponse(rawResponse, {
                     model,
@@ -430,6 +541,9 @@ function parsePageRange(value) {
     }
     return { requested: value, pages };
 }
+function toSortedPageArray(pages) {
+    return [...pages].sort((a, b) => a - b);
+}
 function parseJsonSchema(schemaRaw) {
     try {
         const parsed = JSON.parse(schemaRaw);
@@ -440,6 +554,26 @@ function parseJsonSchema(schemaRaw) {
     }
     catch (error) {
         throw new Error(`Annotation schema must be valid JSON: ${error.message}`);
+    }
+}
+function extractApiErrorMessage(error) {
+    var _a, _b, _c;
+    if (!error || typeof error !== 'object')
+        return 'unknown error';
+    const err = error;
+    const status = ((_a = err.response) === null || _a === void 0 ? void 0 : _a.status) ? `status ${err.response.status}` : 'no status';
+    const data = (_b = err.response) === null || _b === void 0 ? void 0 : _b.data;
+    const details = data ? safeStringify(data) : (_c = err.message) !== null && _c !== void 0 ? _c : 'no details';
+    return `${status} ${details}`.trim();
+}
+function safeStringify(value) {
+    try {
+        if (typeof value === 'string')
+            return value;
+        return JSON.stringify(value);
+    }
+    catch {
+        return String(value);
     }
 }
 function normalizeOcrResponse(response, context) {

@@ -17,6 +17,9 @@ Custom n8n community node for Mistral Document AI OCR using binary PDF/image inp
   - format (`json`/`markdown`)
   - prompt
   - JSON schema (for JSON output)
+- Annotation granularity toggle:
+  - `Annotate Per Page = false` (default): one combined OCR/annotation response for requested page range
+  - `Annotate Per Page = true`: one OCR/annotation request per explicit page and one output item per page
 - Direct OCR multipart attempt with fallback to:
   1. `POST /v1/files`
   2. `POST /v1/ocr` with `document.file_id`
@@ -72,3 +75,17 @@ docker compose exec n8n sh -lc 'echo $N8N_CUSTOM_EXTENSIONS'
 - `meta`
 - optional `document_annotation`
 - optional `raw` when enabled
+
+## Per-page verification
+
+No automated tests are included in this package. Use this manual harness:
+
+1. Set `Pages` to `16-18`.
+2. Set `Enable Document Annotation` to `true`.
+3. Toggle `Annotate Per Page`:
+   - `false`: expect one output item for the whole range.
+   - `true`: expect three output items, each with:
+     - `page_index` (`16`, `17`, `18`)
+     - `page`
+     - `document_annotation`
+     - `meta.singlePage`

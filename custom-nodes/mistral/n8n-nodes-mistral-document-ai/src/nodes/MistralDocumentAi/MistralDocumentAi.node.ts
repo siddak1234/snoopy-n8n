@@ -157,6 +157,13 @@ export class MistralDocumentAi implements INodeType {
 				default: false,
 			},
 			{
+				displayName: 'Annotate Per Page',
+				name: 'perPageAnnotation',
+				type: 'boolean',
+				default: false,
+				description: 'When enabled, processes each requested page separately and outputs one item per page',
+			},
+			{
 				displayName: 'Annotation Output Format',
 				name: 'annotationOutputFormat',
 				type: 'options',
@@ -224,24 +231,37 @@ export class MistralDocumentAi implements INodeType {
 		const returnData: INodeExecutionData[] = [];
 
 		for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-			const binaryPropertyName = this.getNodeParameter('binaryPropertyName', itemIndex) as string;
-			const inputDocumentType = this.getNodeParameter('inputDocumentType', itemIndex) as InputDocType;
-			const modelParam = this.getNodeParameter('model', itemIndex) as string;
-			const useCustomModel = this.getNodeParameter('useCustomModel', itemIndex) as boolean;
-			const customModel = this.getNodeParameter('customModel', itemIndex) as string;
-			const pages = (this.getNodeParameter('pages', itemIndex) as string).trim();
-			const extractTables = this.getNodeParameter('extractTables', itemIndex) as ExtractTablesMode;
-			const extractHeader = this.getNodeParameter('extractHeader', itemIndex) as boolean;
-			const extractFooter = this.getNodeParameter('extractFooter', itemIndex) as boolean;
-			const extractImages = this.getNodeParameter('extractImages', itemIndex) as boolean;
-			const imageLimit = this.getNodeParameter('imageLimit', itemIndex) as number;
-			const minImageSize = this.getNodeParameter('minImageSize', itemIndex) as number;
-			const extractHyperlinks = this.getNodeParameter('extractHyperlinks', itemIndex) as boolean;
-			const enableDocumentAnnotation = this.getNodeParameter('enableDocumentAnnotation', itemIndex) as boolean;
-			const annotationOutputFormat = this.getNodeParameter('annotationOutputFormat', itemIndex) as 'json' | 'markdown';
-			const annotationPrompt = this.getNodeParameter('annotationPrompt', itemIndex) as string;
-			const annotationSchema = this.getNodeParameter('annotationSchema', itemIndex) as string;
-			const additionalOptions = this.getNodeParameter('additionalOptions', itemIndex) as IDataObject;
+			const binaryPropertyName = this.getNodeParameter('binaryPropertyName', itemIndex, 'data') as string;
+			const inputDocumentType = this.getNodeParameter('inputDocumentType', itemIndex, 'auto') as InputDocType;
+			const modelParam = this.getNodeParameter('model', itemIndex, 'mistral-ocr-latest') as string;
+			const useCustomModel = this.getNodeParameter('useCustomModel', itemIndex, false) as boolean;
+			const customModel = useCustomModel
+				? (this.getNodeParameter('customModel', itemIndex, '') as string)
+				: '';
+			const pages = (this.getNodeParameter('pages', itemIndex, '') as string).trim();
+			const extractTables = this.getNodeParameter('extractTables', itemIndex, 'inline') as ExtractTablesMode;
+			const extractHeader = this.getNodeParameter('extractHeader', itemIndex, false) as boolean;
+			const extractFooter = this.getNodeParameter('extractFooter', itemIndex, false) as boolean;
+			const extractImages = this.getNodeParameter('extractImages', itemIndex, false) as boolean;
+			const imageLimit = extractImages
+				? (this.getNodeParameter('imageLimit', itemIndex, 10) as number)
+				: 10;
+			const minImageSize = extractImages
+				? (this.getNodeParameter('minImageSize', itemIndex, 0) as number)
+				: 0;
+			const extractHyperlinks = this.getNodeParameter('extractHyperlinks', itemIndex, false) as boolean;
+			const enableDocumentAnnotation = this.getNodeParameter('enableDocumentAnnotation', itemIndex, false) as boolean;
+			const perPageAnnotation = this.getNodeParameter('perPageAnnotation', itemIndex, false) as boolean;
+			const annotationOutputFormat = enableDocumentAnnotation
+				? (this.getNodeParameter('annotationOutputFormat', itemIndex, 'json') as 'json' | 'markdown')
+				: 'json';
+			const annotationPrompt = enableDocumentAnnotation
+				? (this.getNodeParameter('annotationPrompt', itemIndex, '') as string)
+				: '';
+			const annotationSchema = enableDocumentAnnotation
+				? (this.getNodeParameter('annotationSchema', itemIndex, '') as string)
+				: '';
+			const additionalOptions = this.getNodeParameter('additionalOptions', itemIndex, {}) as IDataObject;
 
 			const normalizeOutput = (additionalOptions.normalizeOutput as boolean | undefined) ?? true;
 			const returnRawResponse = (additionalOptions.returnRawResponse as boolean | undefined) ?? false;
@@ -268,38 +288,50 @@ export class MistralDocumentAi implements INodeType {
 
 			const basePayload: IDataObject = {
 				model,
-				document_type: resolvedType,
-				table_format: extractTables === 'inline' ? null : extractTables,
-				extract_header: extractHeader,
-				extract_footer: extractFooter,
 			};
 
 			if (pages) {
 				basePayload.pages = pages;
 			}
+			if (extractTables !== 'inline') {
+				basePayload.table_format = extractTables;
+			}
+			if (extractHeader) {
+				basePayload.extract_header = true;
+			}
+			if (extractFooter) {
+				basePayload.extract_footer = true;
+			}
 			if (extractImages) {
 				basePayload.extract_images = true;
 				if (imageLimit > 0) basePayload.image_limit = imageLimit;
-				if (minImageSize > 0) basePayload.min_image_size = minImageSize;
+				if (minImageSize > 0) basePayload.image_min_size = minImageSize;
 			}
 			if (extractHyperlinks) {
 				basePayload.extract_hyperlinks = true;
 			}
 			if (enableDocumentAnnotation) {
-				const annotation: IDataObject = {
-					format: annotationOutputFormat,
-				};
 				if (annotationPrompt.trim()) {
-					annotation.prompt = annotationPrompt;
+					basePayload.document_annotation_prompt = annotationPrompt;
 				}
+
 				if (annotationOutputFormat === 'json' && annotationSchema && `${annotationSchema}`.trim()) {
 					try {
-						annotation.schema = parseJsonSchema(annotationSchema);
+						basePayload.document_annotation_format = {
+							type: 'json_schema',
+							json_schema: {
+								name: 'document_annotation',
+								schema: parseJsonSchema(annotationSchema),
+							},
+						};
 					} catch (error) {
 						throw new NodeOperationError(this.getNode(), (error as Error).message, { itemIndex });
 					}
+				} else if (annotationOutputFormat === 'json') {
+					basePayload.document_annotation_format = { type: 'json_object' };
+				} else {
+					basePayload.document_annotation_format = { type: 'text' };
 				}
-				basePayload.document_annotation = annotation;
 			}
 
 			const credentials = await this.getCredentials('mistralCloudApi', itemIndex);
@@ -316,71 +348,6 @@ export class MistralDocumentAi implements INodeType {
 			const ocrEndpoint = `${baseUrl}/v1/ocr`;
 			const filesEndpoint = `${baseUrl}/v1/files`;
 
-			let rawResponse: IDataObject;
-
-			try {
-				rawResponse = (await this.helpers.httpRequest.call(this, {
-					method: 'POST',
-					url: ocrEndpoint,
-					json: true,
-					headers: authHeaders,
-					formData: {
-						file: {
-							value: binaryData,
-							options: {
-								filename: fileName,
-								contentType: mimeType,
-							},
-						},
-						payload: JSON.stringify(basePayload),
-					},
-				} as IHttpRequestOptions)) as IDataObject;
-			} catch {
-				const uploadResponse = (await this.helpers.httpRequest.call(this, {
-					method: 'POST',
-					url: filesEndpoint,
-					json: true,
-					headers: authHeaders,
-					formData: {
-						purpose: 'ocr',
-						file: {
-							value: binaryData,
-							options: {
-								filename: fileName,
-								contentType: mimeType,
-							},
-						},
-					},
-				} as IHttpRequestOptions)) as IDataObject;
-
-				const fileId =
-					(uploadResponse.id as string | undefined) ??
-					(uploadResponse.file_id as string | undefined) ??
-					(uploadResponse.data as IDataObject | undefined)?.id;
-
-				if (!fileId) {
-					throw new NodeOperationError(this.getNode(), 'Mistral file upload did not return a file ID', {
-						itemIndex,
-					});
-				}
-
-				const ocrBody: IDataObject = {
-					...basePayload,
-					document: {
-						type: 'file_id',
-						file_id: fileId,
-					},
-				};
-
-				rawResponse = (await this.helpers.httpRequest.call(this, {
-					method: 'POST',
-					url: ocrEndpoint,
-					json: true,
-					headers: authHeaders,
-					body: ocrBody,
-				} as IHttpRequestOptions)) as IDataObject;
-			}
-
 			let parsedPageRange: ParsedPageRange | null = null;
 			if (pages) {
 				try {
@@ -389,6 +356,155 @@ export class MistralDocumentAi implements INodeType {
 					throw new NodeOperationError(this.getNode(), (error as Error).message, { itemIndex });
 				}
 			}
+
+			const requestOcr = async (payload: IDataObject, pageLabel?: number): Promise<IDataObject> => {
+				let rawResponse: IDataObject | null = null;
+				let multipartError: unknown;
+				let jsonOcrError: unknown;
+				let uploadError: unknown;
+
+				try {
+					rawResponse = (await this.helpers.httpRequest.call(this, {
+						method: 'POST',
+						url: ocrEndpoint,
+						json: true,
+						headers: authHeaders,
+						formData: {
+							file: {
+								value: binaryData,
+								options: {
+									filename: fileName,
+									contentType: mimeType,
+								},
+							},
+							payload: JSON.stringify(payload),
+						},
+					} as IHttpRequestOptions)) as IDataObject;
+				} catch (error) {
+					multipartError = error;
+					const dataUrl = `data:${mimeType};base64,${binaryData.toString('base64')}`;
+					const documentKey = resolvedType === 'pdf' ? 'document_url' : 'image_url';
+					const documentType = resolvedType === 'pdf' ? 'document_url' : 'image_url';
+					const jsonBody: IDataObject = {
+						...payload,
+						document: {
+							type: documentType,
+							document_name: fileName,
+							[documentKey]: dataUrl,
+						},
+					};
+
+					try {
+						rawResponse = (await this.helpers.httpRequest.call(this, {
+							method: 'POST',
+							url: ocrEndpoint,
+							json: true,
+							headers: authHeaders,
+							body: jsonBody,
+						} as IHttpRequestOptions)) as IDataObject;
+					} catch (error) {
+						jsonOcrError = error;
+						try {
+							const uploadResponse = (await this.helpers.httpRequest.call(this, {
+								method: 'POST',
+								url: filesEndpoint,
+								json: true,
+								headers: authHeaders,
+								formData: {
+									purpose: 'ocr',
+									file: {
+										value: binaryData,
+										options: {
+											filename: fileName,
+											contentType: mimeType,
+										},
+									},
+								},
+							} as IHttpRequestOptions)) as IDataObject;
+
+							const fileId =
+								(uploadResponse.id as string | undefined) ??
+								(uploadResponse.file_id as string | undefined) ??
+								(uploadResponse.data as IDataObject | undefined)?.id;
+
+							if (!fileId) {
+								throw new NodeOperationError(this.getNode(), 'Mistral file upload did not return a file ID', {
+									itemIndex,
+								});
+							}
+
+							const ocrBody: IDataObject = {
+								...payload,
+								document: {
+									file_id: fileId,
+								},
+							};
+
+							rawResponse = (await this.helpers.httpRequest.call(this, {
+								method: 'POST',
+								url: ocrEndpoint,
+								json: true,
+								headers: authHeaders,
+								body: ocrBody,
+							} as IHttpRequestOptions)) as IDataObject;
+						} catch (error) {
+							uploadError = error;
+						}
+					}
+				}
+
+				if (!rawResponse) {
+					const onPage = pageLabel ? ` for page ${pageLabel}` : '';
+					throw new NodeOperationError(
+						this.getNode(),
+						[
+							`Mistral OCR failed${onPage} after all request strategies.`,
+							`multipart: ${extractApiErrorMessage(multipartError)}`,
+							`json: ${extractApiErrorMessage(jsonOcrError)}`,
+							`upload: ${extractApiErrorMessage(uploadError)}`,
+						].join(' '),
+						{ itemIndex },
+					);
+				}
+
+				return rawResponse;
+			};
+
+			const explicitPages = parsedPageRange ? toSortedPageArray(parsedPageRange.pages) : [];
+			if (perPageAnnotation && explicitPages.length > 1) {
+				for (const pageNumber of explicitPages) {
+					const singlePagePayload: IDataObject = {
+						...basePayload,
+						pages: String(pageNumber),
+					};
+					const pageRawResponse = await requestOcr(singlePagePayload, pageNumber);
+					const singlePageRange = parsePageRange(String(pageNumber));
+					const pageOutput = normalizeOcrResponse(pageRawResponse, {
+						model,
+						mimeType,
+						requestedPages: singlePageRange,
+					});
+					const normalizedPages = (pageOutput.pages as IDataObject[] | undefined) ?? [];
+					const page = normalizedPages[0];
+					const perPageItem: IDataObject = {
+						page_index: pageNumber,
+						page,
+						document_annotation: pageOutput.document_annotation ?? pageRawResponse.document_annotation,
+						meta: {
+							model,
+							requestedPages: parsedPageRange?.requested,
+							singlePage: pageNumber,
+						},
+					};
+					if (returnRawResponse) {
+						perPageItem.raw = pageRawResponse;
+					}
+					returnData.push({ json: perPageItem });
+				}
+				continue;
+			}
+
+			const rawResponse = await requestOcr(basePayload);
 			const outputJson = normalizeOutput
 				? normalizeOcrResponse(rawResponse, {
 					model,
@@ -456,6 +572,10 @@ function parsePageRange(value: string): ParsedPageRange {
 	return { requested: value, pages };
 }
 
+function toSortedPageArray(pages: Set<number>): number[] {
+	return [...pages].sort((a, b) => a - b);
+}
+
 function parseJsonSchema(schemaRaw: string): IDataObject {
 	try {
 		const parsed = JSON.parse(schemaRaw);
@@ -465,6 +585,27 @@ function parseJsonSchema(schemaRaw: string): IDataObject {
 		return parsed as IDataObject;
 	} catch (error) {
 		throw new Error(`Annotation schema must be valid JSON: ${(error as Error).message}`);
+	}
+}
+
+function extractApiErrorMessage(error: unknown): string {
+	if (!error || typeof error !== 'object') return 'unknown error';
+	const err = error as {
+		message?: string;
+		response?: { status?: number; data?: unknown };
+	};
+	const status = err.response?.status ? `status ${err.response.status}` : 'no status';
+	const data = err.response?.data;
+	const details = data ? safeStringify(data) : err.message ?? 'no details';
+	return `${status} ${details}`.trim();
+}
+
+function safeStringify(value: unknown): string {
+	try {
+		if (typeof value === 'string') return value;
+		return JSON.stringify(value);
+	} catch {
+		return String(value);
 	}
 }
 
