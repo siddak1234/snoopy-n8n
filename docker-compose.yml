@@ -1,4 +1,14 @@
 services:
+  pdf-renderer:
+    build: ./services/pdf-renderer
+    container_name: pdf-renderer
+    environment:
+      - RENDER_AUTH_TOKEN=${RENDER_AUTH_TOKEN}
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
+    volumes:
+      - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro
+    restart: unless-stopped
+
   n8n:
     build: .
     image: snoopy-n8n:latest
