@@ -14,11 +14,8 @@ docker compose ps
 echo "[4/5] Checking GCS env in n8n"
 docker compose exec n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
 
-echo "[5/5] Verifying docs + removal references"
-rg -n "Mistral Document OCR|mistral-ocr-latest" README.md
-if rg -n "receipt-assembler|assemble_from_manifest|pdf-renderer|X-Internal-Token|pdftoppm|pdfinfo|ghostscript|imagemagick|mutool|gotenberg" -S . --glob '!README.md' --glob '!scripts/smoke-cleanup.sh'; then
-  echo "Found legacy MCP/local-render references"
-  exit 1
-fi
+echo "[5/5] Verifying pdf-lib allowlist and runtime availability"
+rg -n "NODE_FUNCTION_ALLOW_EXTERNAL=pdf-lib" .env.example
+docker compose exec n8n sh -lc 'node -e "require(\"pdf-lib\"); console.log(\"pdf-lib ok\")"'
 
 echo "Smoke cleanup checks passed"
