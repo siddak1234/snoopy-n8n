@@ -1,0 +1,17 @@
+services:
+  n8n:
+    environment:
+      - N8N_LOG_LEVEL=info
+      - N8N_PROXY_HOPS=${N8N_PROXY_HOPS}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "require('http').get('http://127.0.0.1:5678/healthz', r =>
+          process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () =>
+          process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped

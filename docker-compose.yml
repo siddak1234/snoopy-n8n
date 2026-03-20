@@ -1,14 +1,27 @@
 services:
   n8n:
     build: .
-    image: snoopy-n8n:latest
+    image: snoopy-n8n:2.8.3-pdf-lib1.17.1
     container_name: snoopy-n8n
     ports:
       - "${N8N_PORT}:5678"
-    env_file:
-      - .env
     environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json
+      - N8N_PROTOCOL=${N8N_PROTOCOL}
+      - N8N_HOST=${N8N_HOST}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_PROXY_HOPS=${N8N_PROXY_HOPS:-}
+      - NODE_FUNCTION_ALLOW_EXTERNAL=${NODE_FUNCTION_ALLOW_EXTERNAL}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - TZ=${TZ}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}
     volumes:
       - ./data:/home/node/.n8n
       - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro

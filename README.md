@@ -6,45 +6,69 @@
 - Document path: PDFs stored in GCS -> invoice combination/merge -> downstream logic.
 - Storage: Google Cloud Storage (GCS) remains the system of record for input/output artifacts.
 - Removed from repo runtime: local PDF rendering/OCR infrastructure and MCP helper services.
+- Only extra runtime dependency: `pdf-lib` for an n8n Code node.
 
-## What Is Kept
+## Deployment Shape
 
 - `n8n` service in `docker-compose.yml`
-- Service account mount for ADC:
-  - `./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro`
-- GCS auth env on n8n:
-  - `GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/gcp-sa.json`
-- Persistent n8n data bind mount:
-  - `./data:/home/node/.n8n`
-- Extra runtime dependency for Code nodes:
-  - `pdf-lib` installed in the n8n image and allowlisted via `NODE_FUNCTION_ALLOW_EXTERNAL=pdf-lib`
+- `docker-compose.local.yml` for local overrides (`N8N_LOG_LEVEL=debug`)
+- `docker-compose.prod.yml` for production overrides (`N8N_LOG_LEVEL=info`, `N8N_PROXY_HOPS`, healthcheck)
+- `./data:/home/node/.n8n` persistent bind mount
+- `./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro` credential mount
 
-## Bring Up
+## Environment Files
 
-```bash
-docker compose build --no-cache
-docker compose up -d
-docker compose logs -f n8n
-```
+Committed templates:
+- `.env.example` (shared baseline)
+- `.env.local.example` (local dev shape)
+- `.env.prod.example` (production shape behind HTTPS reverse proxy)
 
-## Smoke Checks
+Never commit:
+- `.env`
+- `.env.local`
+- `.env.prod`
+- `secrets/gcs-service-account.json`
+- Any API keys (for example `GEMINI_API_KEY`)
 
-```bash
-# 1) n8n service is the only compose service
-docker compose config --services
-
-# 2) n8n is up
-docker compose ps
-
-# 3) GCS env wiring exists in container
-docker compose exec n8n sh -lc 'echo $GOOGLE_APPLICATION_CREDENTIALS'
-
-# 4) pdf-lib allowlist is present
-rg -n "NODE_FUNCTION_ALLOW_EXTERNAL=pdf-lib" .env.example
-```
-
-Optional helper:
+## Local Development
 
 ```bash
-./scripts/smoke-cleanup.sh
+cp .env.local.example .env.local
+
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml up -d --build
+docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml logs -f n8n
 ```
+
+## Production Startup (Cloud VM)
+
+1) Create and fill production env:
+```bash
+cp .env.prod.example .env.prod
+```
+
+2) Ensure reverse proxy forwards `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto`.
+
+3) Start production stack:
+```bash
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
+```
+
+## Minimal Smoke Checks
+
+```bash
+# n8n is the only compose service
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml config --services
+
+# container is healthy/running
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# pdf-lib is available inside n8n runtime
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml exec n8n sh -lc 'node -e "require(\"pdf-lib\"); console.log(\"pdf-lib ok\")"'
+```
+
+## Backup Expectation (Required for Production)
+
+- Back up `./data` nightly (this contains n8n database, workflows, credentials, and runtime state).
+- Keep at least 7 daily and 4 weekly backups.
+- Run a periodic restore test to a staging VM to confirm recovery works.
