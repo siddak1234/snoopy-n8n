@@ -1,3 +1,4 @@
+# Placeholder: This file is a placeholder for future provider-specific overrides.
 # OPTIONAL — Google Compute Engine only: VM-attached service account + metadata ADC (no JSON key file).
 # Do not use on generic VMs unless you intend metadata-based ADC.
 # Generic production: omit this file — see README.

@@ -34,7 +34,7 @@ docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-**Operator safety:** `scripts/up.sh` / `scripts/down.sh` / `scripts/logs.sh` target **local** dev (`--env-file .env.local` + `docker-compose.local.yml`). On a production VM, use the command above, not those scripts.
+**Operator safety:** `scripts/up.sh` / `scripts/down.sh` / `scripts/logs.sh` / `scripts/smoke-cleanup.sh` target **local** dev (`--env-file .env.local` + `docker-compose.local.yml`). On a production VM, use the command above, not those scripts.
 
 ## Auth and integration modes
 
@@ -85,6 +85,28 @@ cp .env.local.example .env.local
 
 docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml up -d --build
 docker compose --env-file .env.local -f docker-compose.yml -f docker-compose.local.yml logs -f n8n
+```
+
+## Production Preflight Checklist (generic VM)
+
+Run this before first production deployment:
+
+```bash
+# 1) Create persistent storage and fix ownership for n8n runtime user ("node")
+mkdir -p data
+sudo chown -R 1000:1000 data
+
+# 2) Create production env from template and edit required values
+cp .env.prod.example .env.prod
+# Edit .env.prod: N8N_ENCRYPTION_KEY, N8N_BASIC_AUTH_*, N8N_PROTOCOL, N8N_HOST, WEBHOOK_URL, N8N_PROXY_HOPS
+
+# 3) Never rely on implicit .env; always pass --env-file
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml config | grep -q "/secrets" && echo "Unexpected /secrets mount in prod config" && exit 1 || true
+
+# 4) Start and verify
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
 ## Minimal Smoke Checks (generic production)

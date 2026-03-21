@@ -1,15 +1,12 @@
 # Environment files
 
-.env
-.env.*
-.env.local
-.env.prod
+.env*
 
 # Secrets
 
 secrets/
-secrets/*
-*.json
+secrets/*.json
+*.key
 
 # Git
 
