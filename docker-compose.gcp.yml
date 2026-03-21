@@ -1,0 +1,10 @@
+# OPTIONAL — Google Compute Engine only: VM-attached service account + metadata ADC (no JSON key file).
+# Do not use on generic VMs unless you intend metadata-based ADC.
+# Generic production: omit this file — see README.
+#
+#   docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.gcp.yml up -d
+#
+# Requires GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION in .env.prod when using Vertex / Google APIs.
+# See docs/deploy-gcp.md
+services:
+  n8n: {}

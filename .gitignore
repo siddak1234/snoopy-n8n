@@ -154,7 +154,7 @@ data/
 postgres_data/
 redis_data/
 
-# secrets
+# secrets (entire ./secrets — service account JSON, keys; never commit)
 .env
 .env.local
 .env.production

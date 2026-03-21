@@ -2,3 +2,7 @@ services:
   n8n:
     environment:
       - N8N_LOG_LEVEL=debug
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+    volumes:
+      - ./secrets:/secrets:ro
+      - ./secrets/gcs-service-account.json:/run/secrets/gcp-sa.json:ro
