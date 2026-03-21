@@ -1,0 +1,22 @@
+# Environment files
+
+.env
+.env.*
+.env.local
+.env.prod
+
+# Secrets
+
+secrets/
+secrets/*
+*.json
+
+# Git
+
+.git
+.gitignore
+
+# Node / logs
+
+node_modules
+npm-debug.log
