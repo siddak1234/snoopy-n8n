@@ -157,7 +157,7 @@ redis_data/
 # secrets (entire ./secrets — service account JSON, keys; never commit)
 .env
 .env.local
-.env.production
+.env.prod
 secrets/*.json
 secrets/gcs-service-account*
 secrets/gcp-sa.json
