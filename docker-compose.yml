@@ -4,7 +4,7 @@ services:
     image: snoopy-n8n:2.8.3-pdf-lib1.17.1
     container_name: snoopy-n8n
     ports:
-      - "${N8N_PORT}:5678"
+      - "127.0.0.1:${N8N_PORT}:5678"
     environment:
       - N8N_PROTOCOL=${N8N_PROTOCOL}
       - N8N_HOST=${N8N_HOST}
@@ -17,13 +17,14 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
       - TZ=${TZ}
-      # Local JSON-key auth is configured in docker-compose.local.yml only.
-      # Generic/prod paths intentionally omit GOOGLE_APPLICATION_CREDENTIALS to allow provider-default auth behavior.
-      # Optional container-level POC keys — prefer n8n Credentials for per-workflow/provider keys in production.
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-}
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
-      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-}
+      # Execution data retention — prevents unbounded SQLite growth
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      # All API credentials are stored in the n8n Credentials DB (encrypted by N8N_ENCRYPTION_KEY).
+      # No API keys are passed via env. GOOGLE_APPLICATION_CREDENTIALS is local-dev only (docker-compose.local.yml).
     volumes:
       - ./data:/home/node/.n8n
       # Secret mounts live in docker-compose.local.yml (local dev only). GCP: use docker-compose.gcp.yml — no JSON.

@@ -1,6 +1,4 @@
-FROM n8nio/n8n:2.8.3
-# TODO: Pin base image by digest after CI validation, e.g.:
-# FROM n8nio/n8n:2.8.3@sha256:<validated_digest>
+FROM n8nio/n8n:2.8.3@sha256:53004142b0e93de1e9e31943e601ed9bd4b24ca82a307864ccadf1820b627e5e
 
 # Install external packages used by Code node allowlist
 USER root

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "n8n-local",
+      "runtimeExecutable": "docker",
+      "runtimeArgs": ["compose", "--env-file", ".env.local", "-f", "docker-compose.yml", "-f", "docker-compose.local.yml", "up"],
+      "port": 5678
+    }
+  ]
+}

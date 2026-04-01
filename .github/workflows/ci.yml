@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create minimal .env for compose validation
+        run: |
+          cat > .env.ci <<EOF
+          N8N_PORT=5678
+          N8N_PROTOCOL=http
+          N8N_HOST=localhost
+          WEBHOOK_URL=http://localhost:5678
+          NODE_FUNCTION_ALLOW_EXTERNAL=pdf-lib
+          N8N_ENCRYPTION_KEY=ci-placeholder-not-real-32chars!!
+          N8N_BASIC_AUTH_ACTIVE=true
+          N8N_BASIC_AUTH_USER=admin
+          N8N_BASIC_AUTH_PASSWORD=ci-placeholder
+          GENERIC_TIMEZONE=America/Chicago
+          TZ=America/Chicago
+          N8N_PROXY_HOPS=1
+          EOF
+
+      - name: Validate compose config
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+          echo "Compose config: PASS"
+
+      - name: Check secrets not mounted in prod overlay
+        run: |
+          output=$(docker compose --env-file .env.ci -f docker-compose.yml -f docker-compose.prod.yml config)
+          if echo "$output" | grep -q "/secrets"; then
+            echo "FAIL: /secrets mount found in prod compose config"
+            exit 1
+          fi
+          echo "No secrets mount in prod config: PASS"
+
+      - name: Build Docker image
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.yml build
+          echo "Docker build: PASS"
+
+      - name: Start container and verify health
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+          echo "Waiting for n8n to be healthy..."
+          for i in $(seq 1 20); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5678/healthz || true)
+            if [ "$status" = "200" ]; then
+              echo "Healthz HTTP 200: PASS"
+              break
+            fi
+            echo "Attempt $i: HTTP $status — waiting..."
+            sleep 5
+          done
+
+          if [ "$status" != "200" ]; then
+            echo "FAIL: healthz did not return 200 after 100s"
+            docker compose --env-file .env.ci -f docker-compose.yml logs
+            exit 1
+          fi
+
+      - name: Verify pdf-lib is loadable
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.yml exec -T n8n \
+            sh -lc 'node -e "require(\"pdf-lib\"); console.log(\"pdf-lib ok\")"'
+
+      - name: Verify no API keys leaked into container env
+        run: |
+          gemini=$(docker compose --env-file .env.ci -f docker-compose.yml exec -T n8n sh -lc 'echo "$GEMINI_API_KEY"' | tr -d '[:space:]')
+          if [ -n "$gemini" ]; then
+            echo "FAIL: GEMINI_API_KEY is set in container"
+            exit 1
+          fi
+          echo "No API keys in container env: PASS"
+
+      - name: Verify execution pruning is active
+        run: |
+          prune=$(docker compose --env-file .env.ci -f docker-compose.yml exec -T n8n sh -lc 'echo "$EXECUTIONS_DATA_PRUNE"' | tr -d '[:space:]')
+          if [ "$prune" != "true" ]; then
+            echo "FAIL: EXECUTIONS_DATA_PRUNE is not true (got: $prune)"
+            exit 1
+          fi
+          echo "Execution pruning active: PASS"
+
+      - name: Teardown
+        if: always()
+        run: docker compose --env-file .env.ci -f docker-compose.yml -f docker-compose.prod.yml down
