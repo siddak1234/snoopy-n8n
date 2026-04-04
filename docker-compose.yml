@@ -20,7 +20,7 @@ services:
       # Execution data retention — prevents unbounded SQLite growth
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
-      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
       # All API credentials are stored in the n8n Credentials DB (encrypted by N8N_ENCRYPTION_KEY).
