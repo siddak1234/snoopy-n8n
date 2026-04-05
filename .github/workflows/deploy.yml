@@ -1,8 +1,7 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -85,7 +84,7 @@ jobs:
             docker pull ghcr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
             echo "Restarting container..."
-            docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --pull always
+            docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
 
             echo "Waiting for health check..."
             status=""
