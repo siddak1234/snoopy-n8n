@@ -70,6 +70,7 @@ jobs:
             cd /opt/snoopy-n8n
 
             echo "Syncing repo..."
+            git config --global --add safe.directory /opt/snoopy-n8n
             git pull origin main
 
             echo "Logging in to GHCR..."
