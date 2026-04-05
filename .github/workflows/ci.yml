@@ -20,7 +20,7 @@ jobs:
           N8N_PROTOCOL=http
           N8N_HOST=localhost
           WEBHOOK_URL=http://localhost:5678
-          NODE_FUNCTION_ALLOW_EXTERNAL=pdf-lib
+          NODE_FUNCTION_ALLOW_EXTERNAL=pdf-lib,exceljs
           N8N_ENCRYPTION_KEY=ci-placeholder-not-real-32chars!!
           N8N_BASIC_AUTH_ACTIVE=true
           N8N_BASIC_AUTH_USER=admin
@@ -74,6 +74,11 @@ jobs:
         run: |
           docker compose --env-file .env.ci -f docker-compose.yml exec -T n8n \
             sh -lc 'node -e "require(\"pdf-lib\"); console.log(\"pdf-lib ok\")"'
+
+      - name: Verify exceljs is loadable
+        run: |
+          docker compose --env-file .env.ci -f docker-compose.yml exec -T n8n \
+            sh -lc 'node -e "require(\"exceljs\"); console.log(\"exceljs ok\")"'
 
       - name: Verify no API keys leaked into container env
         run: |

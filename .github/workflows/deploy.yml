@@ -7,7 +7,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: siddak1234/snoopy-n8n
-  IMAGE_TAG: 2.8.3-pdf-lib1.17.1
+  IMAGE_TAG: 2.8.3-pdf-lib1.17.1-exceljs4.4.0
 
 jobs:
   build-and-push:

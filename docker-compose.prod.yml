@@ -1,6 +1,6 @@
 services:
   n8n:
-    image: ghcr.io/siddak1234/snoopy-n8n:2.8.3-pdf-lib1.17.1
+    image: ghcr.io/siddak1234/snoopy-n8n:2.8.3-pdf-lib1.17.1-exceljs4.4.0
     environment:
       - N8N_LOG_LEVEL=info
       - N8N_PROXY_HOPS=${N8N_PROXY_HOPS}

@@ -1,7 +1,7 @@
 services:
   n8n:
     build: .
-    image: snoopy-n8n:2.8.3-pdf-lib1.17.1
+    image: snoopy-n8n:2.8.3-pdf-lib1.17.1-exceljs4.4.0
     container_name: snoopy-n8n
     ports:
       - "127.0.0.1:${N8N_PORT}:5678"
