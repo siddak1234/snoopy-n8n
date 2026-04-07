@@ -92,3 +92,18 @@ If you accidentally commit a secret:
 2. Use `git filter-branch` or BFG Repo-Cleaner to purge from history.
 3. Force-push the cleaned history.
 4. Notify the team.
+
+## Upgrading Pinned GitHub Actions
+
+Third-party Actions in `.github/workflows/` are pinned to full commit SHAs instead of version tags.
+
+To upgrade an action to a newer version:
+
+1. Go to the action's releases page on GitHub
+2. Find the new version tag you want
+3. Resolve the tag to a commit SHA:
+   ```
+   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<version>
+   ```
+4. Update the `uses:` line with the new SHA
+5. Update the inline version comment to match
