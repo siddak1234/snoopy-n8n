@@ -44,6 +44,7 @@ secrets/*
 .DS_Store
 .vscode/
 .idea/
+.claude/
 
 # Misc
 tmp/
