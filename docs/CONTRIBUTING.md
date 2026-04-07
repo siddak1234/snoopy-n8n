@@ -107,3 +107,4 @@ To upgrade an action to a newer version:
    ```
 4. Update the `uses:` line with the new SHA
 5. Update the inline version comment to match
+
