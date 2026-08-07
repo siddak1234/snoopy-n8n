@@ -49,3 +49,9 @@ secrets/*
 # Misc
 tmp/
 .ngrok2/
+
+# Recovered client data. `_salvage/` holds the n8n workflow export and the legacy
+# database archive: real customer email addresses, vendor names, and dollar
+# amounts. It belongs in encrypted storage, not in git — history is permanent, so
+# deleting the file later does not undo the commit. CI fails if one is tracked.
+_salvage/

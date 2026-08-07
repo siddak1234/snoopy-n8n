@@ -1,0 +1,53 @@
+name: No client data
+
+# Separate from ci.yml deliberately. That workflow builds and boots a container,
+# takes minutes, and runs on pull requests only. This check takes seconds and must
+# also run on direct pushes to main — a solo maintainer commits that way, which is
+# exactly the path an accidental `git add` of recovered client data would take.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: No salvaged client data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan tracked content
+        run: |
+          # `_salvage/` lives in the workspace folder, outside every repository. It
+          # holds the recovered n8n workflows and the legacy database archive: real
+          # customer email addresses, vendor names, and dollar amounts. This
+          # repository is public and git history is permanent, so deleting such a
+          # file in a later commit does not remove it — the only workable control is
+          # to never let it land.
+          if git ls-files | grep -i '_salvage'; then
+            echo "FAIL: a _salvage path is tracked in this repository."
+            exit 1
+          fi
+          # Excludes .github/workflows: this file necessarily names the identifiers
+          # it searches for.
+          if git grep -Iln -iE 'gideontoal|clarossolutions' -- . ':(exclude).github/workflows/*'; then
+            echo "FAIL: a real client identifier appears in tracked content."
+            exit 1
+          fi
+          echo "No salvaged client data: PASS"
+
+      - name: Runtime data directory is not tracked
+        run: |
+          # data/ holds the n8n runtime volume: 1.6 GB including 314 distinct client
+          # invoice PDFs that exist nowhere else. It is gitignored, and it must stay
+          # that way — publishing it to this public repository would be the single
+          # worst outcome available in this repo.
+          if git ls-files | grep -E '^data/'; then
+            echo "FAIL: the n8n runtime data directory is tracked."
+            exit 1
+          fi
+          echo "Runtime data directory untracked: PASS"
