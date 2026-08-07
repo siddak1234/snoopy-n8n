@@ -1,5 +1,22 @@
 # snoopy-n8n
 
+> ## ⚠️ DEPRECATED — this runtime no longer exists
+>
+> The DigitalOcean droplet that ran this stack was **deleted in August 2026**.
+> `https://n8n.autom8x.ai/healthz` is unreachable. Nothing here is deployed, and
+> the deploy pipeline has been removed (`.github/workflows/deploy.yml`) along with
+> its `DO_HOST`, `DO_USER`, `DO_SSH_KEY`, and `GHCR_TOKEN` secrets.
+>
+> **The workflow definitions did not survive the droplet.** `workflows/exports/` is
+> empty and no workflow JSON was ever committed here. They were recovered from a
+> local copy of the volume and are held privately outside this public repository.
+>
+> This repository is retained as historical reference only, pending archive
+> (ADR-0006 excludes n8n from the target runtime). Do not build on it, do not
+> redeploy it, and do not treat it as a migration engine or test oracle.
+>
+> Replacement automation is being built in `snoopy-backend`.
+
 A self-hosted [n8n](https://n8n.io/) workflow automation platform for document processing. Ingests invoices and receipts via email or direct upload, runs them through Gemini-powered OCR and extraction, and outputs structured financial JSON.
 
 ---
